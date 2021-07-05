@@ -1,0 +1,13 @@
+name: histogram-alternatives
+
+channels:
+  - conda-forge
+
+dependencies:
+  - ipympl
+  - ipywidgets
+  - jupyterlab
+  - matplotlib-base
+  - numpy
+  - python
+  - scipy
