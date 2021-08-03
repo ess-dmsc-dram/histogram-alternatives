@@ -2,12 +2,20 @@ name: histogram-alternatives
 
 channels:
   - conda-forge
+  - scipp
 
 dependencies:
+  - h5py
   - ipympl
   - ipywidgets
   - jupyterlab
+  - mantid-framework
   - matplotlib-base
   - numpy
+  - pandas
+  - pythreejs
   - python
+  - scikit-learn
+  - scippneutron
   - scipy
+  - seaborn
