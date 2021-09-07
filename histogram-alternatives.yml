@@ -2,6 +2,7 @@ name: histogram-alternatives
 
 channels:
   - conda-forge
+  - anaconda
   - scipp
 
 dependencies:
