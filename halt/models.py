@@ -7,9 +7,9 @@ import scipy.stats
 
 
 @vectorize(['float64(float64, float64)'])
-def _sphere_pdf(q, r):
-    N = 3 * np.pi / 5 / q
-    if r == 0:
+def sphere_pdf(q, r):
+    N = 3 * np.pi / 5 / r
+    if q == 0:
         return 1 / N
     qr = q * r
     return 9 / N * (math.sin(qr) - qr * math.cos(qr))**2 / qr**6
@@ -21,7 +21,7 @@ def _sphere_cdf_impl(qr, si):
             (2 * qr**4 - qr**2 + 3) * np.cos(2 * qr) - 3) / (2 * np.pi * qr**5)
 
 
-def _sphere_cdf(q, r):
+def sphere_cdf(q, r):
     qr = q * r
     si = scipy.special.sici(2 * qr)[0]
     return _sphere_cdf_impl(qr, si)
@@ -40,7 +40,7 @@ class Sphere(scipy.stats.rv_continuous):
         self.r = r
 
     def _pdf(self, x):
-        return _sphere_pdf(x, self.r)
+        return sphere_pdf(x, self.r)
 
     def _cdf(self, x):
-        return _sphere_cdf(x, self.r)
+        return sphere_cdf(x, self.r)
