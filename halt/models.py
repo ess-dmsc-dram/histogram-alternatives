@@ -27,7 +27,7 @@ def sphere_cdf(q, r):
     return _sphere_cdf_impl(qr, si)
 
 
-class Sphere(scipy.stats.rv_continuous):
+class Sphere_gen(scipy.stats.rv_continuous):
     """
     Random variable the scattering intensity of a sphere.
 
@@ -35,12 +35,11 @@ class Sphere(scipy.stats.rv_continuous):
 
     See for details https://www.sasview.org/docs/user/models/sphere.html
     """
-    def __init__(self, r):
-        super().__init__(a=0)
-        self.r = r
+    def _pdf(self, x, r):
+        return sphere_pdf(x, r)
 
-    def _pdf(self, x):
-        return sphere_pdf(x, self.r)
+    def _cdf(self, x, r):
+        return sphere_cdf(x, r)
 
-    def _cdf(self, x):
-        return sphere_cdf(x, self.r)
+
+sphere = Sphere_gen(a=0.0, shapes='r', name='sphere')
