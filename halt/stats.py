@@ -1,4 +1,6 @@
+import numpy.typing
 import numpy as np
+from scipy import stats
 
 
 def expectation_value(x, p, normed=False):
@@ -20,24 +22,24 @@ def moments(x, p, mom, normed=False):
         res['mean'] = m
         if len(mom) == 1:
             return res
-        
+
     x_minus_m = x - m
     x_minus_m_sq = x_minus_m ** 2
     var = expectation_value(x_minus_m_sq, p, normed=True)
     if 'variance' in mom:
         res['variance'] = var
-        
+
     if 'skewness' in mom:
         res['skewness'] = expectation_value(x_minus_m_sq * x_minus_m / var / np.sqrt(var),
                                             p, normed=True)
-        
+
     if 'kurtosis' in mom:
-        res['kurtosis'] = expectation_value((x_minus_m_sq / var)**2,
+        res['kurtosis'] = expectation_value((x_minus_m_sq / var) ** 2,
                                             p, normed=True)
-        
+
     return res
-    
-    
+
+
 moments.all = ('mean', 'variance', 'skewness', 'kurtosis')
 
 
@@ -45,5 +47,15 @@ def mean(x, p, normed=False):
     return moments(x, p, mom=('mean',), normed=normed)['mean']
 
 
-def variance(x, p, m=None, normed=False):
-    return moments(x, p, mom('variance',), normed=normed)['variance']
+def variance(x, p, normed=False):
+    return moments(x, p, mom=('variance',), normed=normed)['variance']
+
+
+def make_bin_edges(sample: np.typing.ArrayLike,
+                   xmin: float,
+                   xmax: float) -> np.ndarray:
+    """
+    Build bins for histogramming using the Freedman–Diaconis rule.
+    """
+    width = 2 * stats.iqr(sample) / len(sample) ** (1 / 3)
+    return np.arange(xmin, xmax + width, width)
