@@ -17,6 +17,7 @@ dependencies:
   - pandas
   - pythreejs
   - python
+  - rich
   - scikit-learn
   - scippneutron
   - scipy
