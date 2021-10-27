@@ -12,6 +12,7 @@ dependencies:
   - jupyterlab
   - mantid-framework
   - matplotlib-base
+  - numba
   - numpy
   - pandas
   - pythreejs
