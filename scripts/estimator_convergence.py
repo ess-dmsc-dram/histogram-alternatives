@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from copy import deepcopy
-from typing import Dict, Iterable, Sequence, Tuple
+from typing import Dict, Iterable, List, Sequence, Tuple
 
 import numpy as np
 from numpy.typing import ArrayLike
@@ -95,35 +95,35 @@ class Estimator(ABC):
         return {name: None for name in ('__average', '__square_average',
                                         *self.param_names)}
 
-    def _add_result(self, accumulators: Dict[str, sc.DataArray], result: sc.DataArray) -> None:
+    def _add_result(self, samples: Dict[str, List], result: sc.DataArray) -> None:
         def add_value(key, value):
             if key in accumulators:
                 accumulators[key] += value
             else:
                 accumulators[key] = deepcopy(value)
 
-        add_value('__average', result.data)
-        add_value('__square_average', result.data ** 2)
+        samples.setdefault('__values', []).append(result.data.values)
         for name in self.param_names:
-            add_value(name, result.meta[name])
+            samples.setdefault(name, []).append(result.meta[name].value)
 
     def __call__(self, n_resample: int, rng: np.random.Generator) -> sc.DataArray:
-        accumulators = dict()
+        samples = {}
         coord = None
         for result in map(lambda sample: self._do_estimate(sample, self.x),
                           self._iter_samples(n_resample, rng)):
-            self._add_result(accumulators, result)
+            self._add_result(samples, result)
             if coord is None:
                 coord = result.coords['x']
             else:
                 assert sc.allclose(coord, result.coords['x'])
 
-        data = accumulators['__average']
-        data.variances = (data.values ** 2 - accumulators['__square_average'].values) / (n_resample - 1)
-        data.values /= n_resample
-        return sc.DataArray(data, coords={'x': coord},
+        return sc.DataArray(sc.array(dims=['x'], values=np.mean(samples['__values'], axis=0),
+                                     variances=np.var(samples['__values'], axis=0)),
+                            coords={'x': coord},
                             attrs={'sample_size': sc.scalar(len(self.base_sample)),
-                                   'n_resample': sc.scalar(n_resample)})
+                                   'n_resample': sc.scalar(n_resample),
+                                   **{name: sc.scalar(value=np.mean(samples[name]),
+                                                      variance=np.var(samples[name])) for name in self.param_names}})
 
 
 class HistogramEstimator(Estimator, SphereFitMixin):
