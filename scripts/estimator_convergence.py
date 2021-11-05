@@ -203,6 +203,24 @@ def plot_densities(densities: Dict[int, Dict[str, sc.DataArray]],
     fig.tight_layout()
 
 
+def plot_parameters(densities: Dict[int, Dict[str, sc.DataArray]]) -> None:
+    fig, ax = plt.subplots(1, 1)
+    ax.axhline(TRUE_R, c=COLOURS['true'])
+    ax.set_xlabel('n')
+    ax.set_ylabel('r')
+
+    fit_results = {}
+    for n, per_n in densities.items():
+        for name, result in per_n.items():
+            fit_results.setdefault(name, []).append((n, result.attrs['r'].value, result.attrs['r'].variance))
+    for name, data in fit_results.items():
+        x, y, e = zip(*data)
+        ax.errorbar(x, y, e, c=COLOURS[name], label=name)
+
+    ax.legend()
+    fig.tight_layout()
+
+
 def estimate(sample, x, rng):
     estimators = (KDEEstimator(sample, x),
                   HistogramEstimator(sample, x))
@@ -212,23 +230,14 @@ def estimate(sample, x, rng):
     return results
 
 
-def fit_r(densities: Dict[int, Dict[str, sc.DataArray]]) -> None:
-    for ds in densities.values():
-        for density in ds.values():
-            density.attrs['r'] = sc.scalar(unary_fit(fit_model,
-                                                     xdata=density.coords['x'].values,
-                                                     ydata=density.data.values,
-                                                     p0=[1]))
-
-
 def main():
     rng = np.random.default_rng(8471)
     true_distribution = sphere(r=TRUE_R, loc=0.0, scale=1.0)
     base_sample = make_sample(true_distribution, SAMPLE_SIZES[-1], rng)
     x = np.linspace(0, 5, 1000)
     densities = {size: estimate(base_sample[:size], x, rng) for size in SAMPLE_SIZES}
-    fit_r(densities)
     plot_densities(densities, true_distribution)
+    plot_parameters(densities)
     plt.show()
 
 
