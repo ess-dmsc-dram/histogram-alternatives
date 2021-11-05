@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from copy import deepcopy
 from typing import Dict, Iterable, Sequence, Tuple
 
 import numpy as np
@@ -99,7 +100,7 @@ class Estimator(ABC):
             if key in accumulators:
                 accumulators[key] += value
             else:
-                accumulators[key] = value
+                accumulators[key] = deepcopy(value)
 
         add_value('__average', result.data)
         add_value('__square_average', result.data ** 2)
