@@ -1,17 +1,11 @@
-from abc import ABC, abstractmethod
-from copy import deepcopy
-from typing import Dict, Iterable, List, Sequence, Tuple
+from typing import Dict, Iterable, Tuple
 
 import numpy as np
-from numpy.typing import ArrayLike
 import matplotlib.pyplot as plt
 import scipy
-from rich.progress import BarColumn, Progress, SpinnerColumn, TimeElapsedColumn, TimeRemainingColumn
 import scipp as sc
-from statsmodels.nonparametric.kde import KDEUnivariate
-
 from halt.models import sphere, sphere_pdf
-from halt.stats import make_bin_edges
+from halt.estimators import HistogramEstimator, KDEEstimator, MaximumLikelihoodEstimator
 
 TRUE_R = 2.0
 SAMPLE_SIZES = [100, 200, 300, 400]
@@ -33,130 +27,17 @@ def maximum_likelihood(sample):
     return sphere.fit(sample, floc=0.0, fscale=1.0, method='MLE')[0]
 
 
-def fit_model(q, r):
-    return sphere_pdf(q, r)
-
-
 def unary_fit(*args, **kwargs):
     (p,), ((_e,),) = scipy.optimize.curve_fit(*args, **kwargs)
     return p
 
 
-class SphereFitMixin:
-    @staticmethod
-    def fit_parameters(data: sc.DataArray) -> Dict[str, sc.Variable]:
-        if 'r' in data.meta:
-            return {'r': data.meta['r']}
-        return {'r': sc.scalar(unary_fit(sphere_pdf, xdata=data.coords['x'].values,
-                                         ydata=data.data.values, p0=[1]))}
-
-
-class Estimator(ABC):
-    def __init__(self, name: str, full_sample: ArrayLike, x: ArrayLike,
-                 param_names: Sequence[str]):
-        self.name = name
-        self.base_sample = full_sample
-        self.x = x
-        self.param_names = tuple(param_names)
-
-        self._progress = Progress(SpinnerColumn('flip'),
-                                  '[progress.description]{task.description}',
-                                  BarColumn(bar_width=None),
-                                  'ETA:',
-                                  TimeRemainingColumn(),
-                                  'Elapsed:',
-                                  TimeElapsedColumn())
-
-    @abstractmethod
-    def estimate_once(self, sample: ArrayLike, x: ArrayLike) -> sc.DataArray:
-        pass
-
-    def _do_estimate(self, sample: ArrayLike, x: ArrayLike) -> sc.DataArray:
-        result = self.estimate_once(sample, x)
-        if hasattr(self, 'fit_parameters'):
-            for key, val in self.fit_parameters(result).items():
-                result.attrs[key] = val
-        return result
-
-    def resample(self, rng: np.random.Generator) -> ArrayLike:
-        return rng.choice(self.base_sample, size=len(self.base_sample), replace=True)
-
-    def _tracked_range(self, n: int) -> Iterable[int]:
-        with self._progress:
-            yield from self._progress.track(
-                range(n),
-                description=f'Estimating {self.name} (size={len(self.base_sample)})')
-
-    def _iter_samples(self, n: int, rng: np.random.Generator) -> Iterable[ArrayLike]:
-        for _ in self._tracked_range(n):
-            yield self.resample(rng)
-
-    def _make_accumulators(self) -> Dict:
-        return {name: None for name in ('__average', '__square_average',
-                                        *self.param_names)}
-
-    def _add_result(self, samples: Dict[str, List], result: sc.DataArray) -> None:
-        def add_value(key, value):
-            if key in accumulators:
-                accumulators[key] += value
-            else:
-                accumulators[key] = deepcopy(value)
-
-        samples.setdefault('__values', []).append(result.data.values)
-        for name in self.param_names:
-            samples.setdefault(name, []).append(result.meta[name].value)
-
-    def __call__(self, n_resample: int, rng: np.random.Generator) -> sc.DataArray:
-        samples = {}
-        coord = None
-        for result in map(lambda sample: self._do_estimate(sample, self.x),
-                          self._iter_samples(n_resample, rng)):
-            self._add_result(samples, result)
-            if coord is None:
-                coord = result.coords['x']
-            else:
-                assert sc.allclose(coord, result.coords['x'])
-
-        return sc.DataArray(sc.array(dims=['x'], values=np.mean(samples['__values'], axis=0),
-                                     variances=np.var(samples['__values'], axis=0)),
-                            coords={'x': coord},
-                            attrs={'sample_size': sc.scalar(len(self.base_sample)),
-                                   'n_resample': sc.scalar(n_resample),
-                                   **{name: sc.scalar(value=np.mean(samples[name]),
-                                                      variance=np.var(samples[name])) for name in self.param_names}})
-
-
-class HistogramEstimator(Estimator, SphereFitMixin):
-    def __init__(self, full_sample: ArrayLike, x: ArrayLike):
-        super().__init__('histogram', full_sample, x, param_names=('r',))
-        self.bin_edges = make_bin_edges(full_sample, xmin=x[0], xmax=x[-1])
-
-    def estimate_once(self, sample: ArrayLike, _x: ArrayLike) -> sc.DataArray:
-        bin_centres = (self.bin_edges[1:] + self.bin_edges[:-1]) / 2
-        density = np.histogram(sample, bins=self.bin_edges, density=True)[0]
-        return data_array_1d(density, bin_centres, 'x')
-
-
-class KDEEstimator(Estimator, SphereFitMixin):
-    def __init__(self, full_sample: ArrayLike, x: ArrayLike):
-        super().__init__('KDE', full_sample, x, param_names=('r',))
-
-    def estimate_once(self, sample: ArrayLike, x: ArrayLike) -> sc.DataArray:
-        kde = KDEUnivariate(sample)
-        kde.fit()
-        density = kde.evaluate(x)
-        return data_array_1d(density, x, 'x')
-
-
-class MaximumLikelihoodEstimator(Estimator, SphereFitMixin):
-    def __init__(self, full_sample: ArrayLike, x: ArrayLike):
-        super().__init__('MLE', full_sample, x, param_names=('r',))
-
-    def estimate_once(self, sample: ArrayLike, x: ArrayLike) -> sc.DataArray:
-        r = maximum_likelihood(sample)
-        data = data_array_1d(sphere.pdf(x, r=r), x, 'x')
-        data.attrs['r'] = sc.scalar(r)
-        return data
+def fit_r(data: sc.DataArray) -> sc.Variable:
+    return sc.scalar(
+        unary_fit(sphere_pdf,
+                  xdata=data.coords['x'].values,
+                  ydata=data.data.values,
+                  p0=[1]))
 
 
 def find_xlim(densities: Iterable[sc.DataArray]) -> Tuple[float, float]:
@@ -222,10 +103,10 @@ def plot_parameters(densities: Dict[int, Dict[str, sc.DataArray]]) -> None:
 
 
 def estimate(sample, x, rng):
-    estimators = (KDEEstimator(sample, x),
-                  HistogramEstimator(sample, x))
+    estimators = (KDEEstimator(sample, x, {'r': fit_r}),
+                  HistogramEstimator(sample, x, {'r': fit_r}))
     results = {estimator.name: estimator(N_RESAMPLE, rng) for estimator in estimators}
-    mle = MaximumLikelihoodEstimator(sample, x)
+    mle = MaximumLikelihoodEstimator(sample, x, sphere)
     results[mle.name] = mle(N_RESAMPLE_MLE, rng)
     return results
 
