@@ -3,7 +3,7 @@ from typing import Callable, Dict, Iterable, List
 
 import numpy as np
 from numpy.typing import ArrayLike
-from rich.progress import BarColumn, Progress, SpinnerColumn, \
+from rich.progress import BarColumn, Progress, \
     TimeElapsedColumn, TimeRemainingColumn
 import scipp as sc
 from statsmodels.nonparametric.kde import KDEUnivariate
@@ -24,8 +24,7 @@ class Estimator(ABC):
         self.x = x
         self.param_fit = param_fit
 
-        self._progress = Progress(SpinnerColumn('flip'),
-                                  '[progress.description]{task.description}',
+        self._progress = Progress('[progress.description]{task.description}',
                                   BarColumn(bar_width=None), 'ETA:',
                                   TimeRemainingColumn(), 'Elapsed:',
                                   TimeElapsedColumn())
