@@ -22,3 +22,4 @@ dependencies:
   - scippneutron
   - scipy
   - seaborn
+  - yapf
